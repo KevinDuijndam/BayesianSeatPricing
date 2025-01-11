@@ -12,7 +12,8 @@ class ProbaPrediction:
         self.name = "Binomial"
         self.seats_available = seats_available
         self.prices_possible = prices_offered
-        self.prices = np.full((self.seats_available), np.random.choice(self.prices_possible))
+        self.rng = np.random.default_rng(seed=42)
+        self.prices = np.full((self.seats_available), self.rng.choice(self.prices_possible))
         if USE_MULTIPLE_FLIGHT_MODEL:
             self.nr_different_flights = nr_flight_types
             self.action_history = [deque(maxlen=100) for _ in range(self.nr_different_flights)]
@@ -52,12 +53,12 @@ class ProbaPrediction:
                     self.prior_hierarchical_sigma = 0.25
                     self.posterior_hierarchical_sigma = 0.25
                     self.alpha = list(
-                                          np.array([np.random.normal(self.prior_alpha_hierarchical_mu,
+                                          np.array([self.rng.normal(self.prior_alpha_hierarchical_mu,
                                                                      self.prior_hierarchical_sigma)
                                                     for _ in range(len(self.prices_possible))])
                                           for _ in range(self.nr_different_flights))
                     self.beta = list(
-                                          np.array([np.random.normal(self.prior_beta_hierarchical_mu,
+                                          np.array([self.rng.normal(self.prior_beta_hierarchical_mu,
                                                                      self.prior_hierarchical_sigma)
                                                     for _ in range(len(self.prices_possible))])
                                           for _ in range(self.nr_different_flights))
@@ -87,10 +88,10 @@ class ProbaPrediction:
     def initialise_for_flight_type(self, flight_type):
         if USE_HIERARCHICAL_MODEL:
             if not self.prior_initialised[flight_type]:
-                self.alpha[flight_type] = np.array([np.random.normal(self.posterior_alpha_hierarchical_mu,
+                self.alpha[flight_type] = np.array([self.rng.normal(self.posterior_alpha_hierarchical_mu,
                                                                      self.posterior_hierarchical_sigma)
                                                     for _ in range(len(self.prices_possible))])
-                self.beta[flight_type] = np.array([np.random.normal(self.posterior_beta_hierarchical_mu,
+                self.beta[flight_type] = np.array([self.rng.normal(self.posterior_beta_hierarchical_mu,
                                                                      self.posterior_hierarchical_sigma)
                                                    for _ in range(len(self.prices_possible))])
                 self.prior_initialised[flight_type] = True
@@ -108,10 +109,15 @@ class ProbaPrediction:
                     return stats.beta.ppf(0.9, self.alpha[price_index], self.beta[price_index])
             else:
                 if USE_MULTIPLE_FLIGHT_MODEL:
-                    return stats.beta.rvs(self.alpha[flight_type][price_index], self.beta[flight_type][price_index],
-                                          size=1)[0]
+                    return stats.beta.rvs(self.alpha[flight_type][price_index],
+                                          self.beta[flight_type][price_index],
+                                          size=1,
+                                          random_state=self.rng)[0]
                 else:
-                    return stats.beta.rvs(self.alpha[price_index], self.beta[price_index], size=1)[0]
+                    return stats.beta.rvs(self.alpha[price_index],
+                                          self.beta[price_index],
+                                          size=1,
+                                          random_state=self.rng)[0]
         else:
             if USE_MULTIPLE_FLIGHT_MODEL:
                 return self.p[flight_type][np.where(self.prices_possible == price)][0]
@@ -137,7 +143,7 @@ class ProbaPrediction:
         return np.full((self.seats_available), optimal_price), expected_seats
 
     def update_during_booking(self, booking_index, total_customers, action,
-                              start_state, prediction, current_revenue, current_state):
+                              start_state, prediction, current_revenue, current_state, flight_type):
         #return action
         seats_sold = sum(current_state) - sum(start_state)
         probability_of_seats_lower_equal = stats.binom.cdf(seats_sold,

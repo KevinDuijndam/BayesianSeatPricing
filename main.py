@@ -26,9 +26,9 @@ import copy
 
 import warnings
 
-ENABLE_UPDATE_DURING_SALES = True
+ENABLE_UPDATE_DURING_SALES = False
 ENABLE_MULTIPLE_SALES_WINDOWS = False
-OUTPUT_PER_FIVE_FLIGHTS = True
+OUTPUT_PER_FIVE_FLIGHTS = False
 
 
 def timeit(func):
@@ -76,8 +76,8 @@ def run_simulation_multiple_flights(simulation_rounds: int, nr_different_flights
             customer_wtp_sigma = flight_group_parameters[flight_group_nr][2]
             customer_wtp_scale = flight_group_parameters[flight_group_nr][3]
             for _ in range(nr_flights_per_group):
-                total_customers = np.random.binomial(customer_max, customer_probability)
-                #total_customers = 100
+                #total_customers = np.random.binomial(customer_max, customer_probability)
+                total_customers = 100
                 flight_simulation = SeatSimulation.SeatSimulationFlight(total_nr_customers=total_customers,
                                                                         wtp_mu=0, wtp_sigma=customer_wtp_sigma,
                                                                         wtp_scale=customer_wtp_scale,
@@ -310,7 +310,7 @@ def run_simulation_general(simulation_rounds: int, nr_flights: int, seats_availa
 
 @timeit
 def start_model():
-    prices = np.linspace(1, 250, 10)
+    prices = np.linspace(1, 250, 100)
     prices_test = [prices]
     np.random.seed(42)
     seats_available = 18
@@ -318,12 +318,13 @@ def start_model():
     nr_flights = 6
     nr_different_flights = 50
     #prices_test = [[5, 7, 10, 12, 15, 18, 20, 23, 25, 28, 30, 33, 35, 38, 40, 43, 45, 47, 50, 53, 55, 58, 60, 63, 65, 70]]
-
     for price in prices_test:
         models = []
-        #qlearning = QLearning.QLearning(epsilon=0.01, lr=0.995, gamma=0.95,
-        #                                seats_available=seats_available, price_levels=price)
-        #models.append(qlearning)
+        # Q learning default settings, epsilon=0.01, lr=0.995, gamma=0.95
+        qlearning = QLearning.QLearning(epsilon=0.01, lr=0.995, gamma=0.9,
+                                         seats_available=seats_available, price_levels=price)
+        models.append(qlearning)
+
         #optimiser = keras.optimizers.Adam(learning_rate=0.025, clipnorm=1.0)
         #loss_function = keras.losses.Huber()
         #model_NN = NNLearning.NNLearning(gamma=0.9, epsilon=0.01, batch_size=64,
@@ -335,21 +336,29 @@ def start_model():
         #model_DDPG = DDPG.DDPG(gamma=0.9, batch_size=1024, seats_available=seats_available, price_levels=prices,
         #                       nr_flight_types=nr_different_flights)
         #models.append(model_DDPG)
-        #model_lin = LinPred.LinPred(type="linear", seats_available=seats_available, epsilon=0.05,
-        #                            prices_offered=price)
-        #models.append(model_lin)
-        #model_proba = ProbaPrediction.ProbaPrediction(type="Binomial", seats_available=seats_available,
-        #                                              prices_offered=price, nr_flight_types=nr_different_flights)
-        #models.append(model_proba)
-        #model_proba_bayes = ProbaPrediction.ProbaPrediction(type="Binomial Bayesian", seats_available=seats_available,
-        #                                              prices_offered=price, nr_flight_types=nr_different_flights)
-        #models.append(model_proba_bayes)
+        model_lin = LinPred.LinPred(type="linear", seats_available=seats_available, epsilon=0.05,
+                                    prices_offered=price)
+        models.append(model_lin)
+
+        model_lin_pos = LinPred.LinPred(type="linear_positive", seats_available=seats_available, epsilon=0.05,
+                                    prices_offered=price)
+        models.append(model_lin_pos)
+
+        model_bays_simple = BayesianApproach.BayesianApproach(type="linear", seats_available=seats_available,
+                                                              epsilon=0.05, prices_offered=price,
+                                                              nr_flight_types=nr_different_flights)
+        models.append(model_bays_simple)
+
+        model_proba = ProbaPrediction.ProbaPrediction(type="Binomial", seats_available=seats_available,
+                                                      prices_offered=price, nr_flight_types=nr_different_flights)
+        models.append(model_proba)
+        model_proba_bayes = ProbaPrediction.ProbaPrediction(type="Binomial Bayesian", seats_available=seats_available,
+                                                      prices_offered=price, nr_flight_types=nr_different_flights)
+        models.append(model_proba_bayes)
         #model_proba_ucb = ProbaPrediction.ProbaPrediction(type="Binomial Bayesian UCB", seats_available=seats_available,
         #                                              prices_offered=price, nr_flight_types=nr_different_flights)
         #models.append(model_proba_ucb)
-        #model_lin_pos = LinPred.LinPred(type="linear_positive", seats_available=seats_available, epsilon=0.05,
-        #                            prices_offered=price)
-        #models.append(model_lin_pos)
+
         #model_log = LinPred.LinPred(type="logistic", seats_available=seats_available, epsilon=0.05,
         #                            prices_offered=price)
         #models.append(model_log)
@@ -360,10 +369,7 @@ def start_model():
         #model_bayes = BayesPred.BayesPred(type="logistic", seats_available=seats_available, epsilon=0.05,
         #                                  prices_offered=price)
         #models.append(model_bayes)
-        #model_bays_simple = BayesianApproach.BayesianApproach(type="linear", seats_available=seats_available,
-        #                                                      epsilon=0.05, prices_offered=price,
-        #                                                      nr_flight_types=nr_different_flights)
-        #models.append(model_bays_simple)
+
         #model_double_lin = LinPred.LinPred(type="double_linear", seats_available=seats_available, epsilon=0.05, prices_offered=price)
         #models.append(model_double_lin)
         #model_poly = LinPred.LinPred(type="polynomial", seats_available=seats_available, epsilon=0.05,
@@ -372,13 +378,13 @@ def start_model():
         #model_deeppred = DeepPred.DeepPred(epsilon=0.05, batch_size=32, max_steps=10,
         #                                   seats_available=seats_available, price_levels=price)
         #models.append(model_deeppred)
-        #model_exp = ExpPred.ExpPred(type="exp", seats_available=seats_available, epsilon=0.05,
-        #                            prices_offered=price, nr_flight_types=nr_different_flights)
-        #models.append(model_exp)
-        model_value_iteration = ValueIteration.ValueIteration(type="Value Iteration", seats_available=seats_available,
-                                                              epsilon=0.05, prices_offered=price,
-                                                              nr_flight_types=nr_different_flights)
-        models.append(model_value_iteration)
+        model_exp = ExpPred.ExpPred(type="exp", seats_available=seats_available, epsilon=0.05,
+                                    prices_offered=price, nr_flight_types=nr_different_flights)
+        models.append(model_exp)
+        #model_value_iteration = ValueIteration.ValueIteration(type="Value Iteration", seats_available=seats_available,
+        #                                                      epsilon=0.05, prices_offered=price,
+        #                                                      nr_flight_types=nr_different_flights)
+        #models.append(model_value_iteration)
         run_simulation_multiple_flights(simulation_rounds, nr_different_flights, nr_flights,
                                         seats_available, price, models)
         #run_simulation_flight(simulation_rounds, nr_flights, seats_available, price, models)

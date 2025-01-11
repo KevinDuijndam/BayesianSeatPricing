@@ -13,17 +13,18 @@ class QLearning:
     def __init__(self, epsilon: float, lr: float, gamma: float, seats_available: int, price_levels: []):
         self.epsilon = epsilon
         self.lr = lr
-        self.name = "Q-Learning"
+        self.name = "Q-Learning" + "_" + str(epsilon) + "_" + str(lr) + "_" + str(gamma)
         self.gamma = gamma
         self.seats_available = seats_available
         #self.Q = np.zeros([2**self.seats_available, len(price_levels)])
         self.Q = np.zeros(len(price_levels))
         self.max_price = len(price_levels)
         self.price_levels = price_levels
+        self.rng = np.random.default_rng(seed=42)
 
     def calculate_step(self, current_state: []):
-        if np.random.rand() < self.epsilon:
-            choice = np.random.choice(self.max_price)
+        if self.rng.random() < self.epsilon:
+            choice = self.rng.choice(self.max_price)
             return choice, self.price_levels[choice]
         else:
             #representation = get_state(current_state)
@@ -32,8 +33,8 @@ class QLearning:
             return choice, self.price_levels[choice]
 
     def get_action(self, state: [], flight_type):
-        if np.random.rand() < self.epsilon:
-            choice = np.random.choice(self.max_price)
+        if self.rng.random() < self.epsilon:
+            choice = self.rng.choice(self.max_price)
             prices = np.full(self.seats_available, self.price_levels[choice], dtype=float)
             return prices, choice
         else:
@@ -55,7 +56,7 @@ class QLearning:
                                             self.lr * (reward + self.gamma * max(self.Q[new_state_index, :]))
 
     def update_during_booking(self, booking_index, total_customers, action,
-                              start_state, prediction, current_revenue, current_state):
+                              start_state, prediction, current_revenue, current_state, flight_type):
         return action, False
 
     def process_data(self, action, start_state, prediction, round_revenue, new_state,
@@ -68,7 +69,7 @@ class QLearning:
                                             self.lr * (round_revenue + self.gamma * self.Q[new_state_index])
 
     def name(self):
-        return "Q-Learning"
+        return self.name
 
     def print_matrix(self):
         print(self.Q)

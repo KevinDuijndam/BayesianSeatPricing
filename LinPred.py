@@ -16,18 +16,19 @@ class LinPred:
         self.prices_possible = prices_offered
         self.epsilon = epsilon
         self.skip_offer_price = []
+        self.rng = np.random.default_rng(seed=42)
         for _ in range(self.seats_available):
             nr_prices = len(prices_offered)
             self.skip_offer_price.append(np.full((nr_prices), False))
-        self.prices = np.full((self.seats_available), np.random.choice(self.prices_possible))
+        self.prices = np.full((self.seats_available), self.rng.choice(self.prices_possible))
         if self.TYPE == "linear":
-            self.name = "Linear model"
+            self.name = "Linear model" + "_" + str(epsilon)
             self.model = LinearRegression()
             X = np.array([self.prices]).reshape((1, -1))
             y = np.array(18).reshape((1, -1))
             self.model.fit(X, y)        # Random fit just so it's initialised
         elif self.TYPE == "linear_positive":
-            self.name = "Linear (positive) model"
+            self.name = "Linear (positive) model" + "_" + str(epsilon)
             self.model = ConstrainedLinearRegression.ConstrainedLinearRegression()
             X = np.array([np.full(self.seats_available, self.prices_possible[0]),
                           np.full(self.seats_available, self.prices_possible[len(self.prices_possible)-1])])
@@ -36,7 +37,7 @@ class LinPred:
             #y = np.array(18).reshape((1, -1))
             self.model.fit(X, y)  # Random fit just so it's initialised
         elif self.TYPE == "double_linear":
-            self.name = "Double Linear model"
+            self.name = "Double Linear model" + "_" + str(epsilon)
             self.model = []
             self.model.append(LinearRegression())
             self.model.append(LinearRegression())
@@ -55,13 +56,13 @@ class LinPred:
             #X = np.array([self.prices[0]]).reshape((1, -1))
             self.model[1].fit(np.array([X_1, X_2]), np.array([self.seats_available, 0]))  # Random fit just so it's initialised for window/aisle seats
         elif self.TYPE == "polynomial":
-            self.name = "Polynomial model"
+            self.name = "Polynomial model" + "_" + str(epsilon)
             self.model = make_pipeline(PolynomialFeatures(3),LinearRegression())
             X = np.array([self.prices]).reshape((1, -1))
             y = np.array(18).reshape((1, -1))
             self.model.fit(X, y)  # Random fit just so it's initialised
         elif self.TYPE == "logistic":
-            self.name = "Logistic model"
+            self.name = "Logistic model" + "_" + str(epsilon)
             self.model = []     # Create logistic model per seat
             for i in range(self.seats_available):
                 self.model.append(LogisticRegression())
@@ -69,7 +70,7 @@ class LinPred:
                 y = np.array([1, 0])
                 self.model[i].fit(X, y)  # Random fit just so it's initialised with 50-50 chance
         elif self.TYPE == "logistic_positive":
-            self.name = "Logistic Positive"
+            self.name = "Logistic Positive" + "_" + str(epsilon)
             self.model = []
             for i in range(self.seats_available):
                 self.model.append(cLogisticRegression())
@@ -131,15 +132,15 @@ class LinPred:
     def get_action(self, state: [], flight_type):
         if self.TYPE == "linear_positive":
             if self.frame_count < 2:
-                self.prices = np.full((self.seats_available), np.random.choice(self.prices_possible))
+                self.prices = np.full((self.seats_available), self.rng.choice(self.prices_possible))
                 if self.frame_count > 0:
                     while sum(self.action_history[0] - self.prices) == 0:
-                        self.prices = np.full((self.seats_available), np.random.choice(self.prices_possible))
+                        self.prices = np.full((self.seats_available), self.rng.choice(self.prices_possible))
                 predicted_seats = self.get_prediction(self.prices)
                 return self.prices, predicted_seats
 
-        if np.random.rand() < self.epsilon:
-            self.prices = np.full((self.seats_available), np.random.choice(self.prices_possible))
+        if self.rng.random() < self.epsilon:
+            self.prices = np.full((self.seats_available), self.rng.choice(self.prices_possible))
         else:
             if self.TYPE == "linear" or self.TYPE == "linear_positive" or self.TYPE == "polynomial":
                 top_revenue = 0
@@ -179,9 +180,9 @@ class LinPred:
                         window_top_price = price
                         found_window_price = True
                 if not found_middle_price:
-                    middle_top_price = np.random.choice(self.prices_possible)
+                    middle_top_price = self.rng.choice(self.prices_possible)
                 if not found_window_price:
-                    window_top_price = np.random.choice(self.prices_possible)
+                    window_top_price = self.rng.choice(self.prices_possible)
                 self.prices[mask] = middle_top_price
                 self.prices[~np.array(mask)] = window_top_price
             elif self.TYPE == "logistic" or self.TYPE == "logistic_positive":
@@ -238,7 +239,7 @@ class LinPred:
         return result
 
     def update_during_booking(self, booking_index, total_customers, action,
-                              start_state, prediction, current_revenue, current_state):
+                              start_state, prediction, current_revenue, current_state, flight_type):
         if self.TYPE == "linear" or self.TYPE == "polynomial":
             return action, False
         elif self.TYPE == "linear_positive":

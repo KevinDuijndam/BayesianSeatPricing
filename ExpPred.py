@@ -5,11 +5,9 @@ import numpy as np
 import pandas as pd
 import pymc as pm
 import xarray as xr
-
-RANDOM_SEED = 42
 from scipy import stats
-rng = np.random.default_rng(RANDOM_SEED)
-USE_HIERARCHICAL_MODEL = True
+
+USE_HIERARCHICAL_MODEL = False
 
 class ExpPred:
     def __init__(self, type: str, seats_available: int, epsilon: float, prices_offered: [], nr_flight_types: int):
@@ -18,7 +16,8 @@ class ExpPred:
         self.prices_possible = prices_offered
         self.nr_different_flights = nr_flight_types
         self.epsilon = epsilon
-        self.prices = np.full((self.seats_available), np.random.choice(self.prices_possible))
+        self.rng = np.random.default_rng(seed=42)
+        self.prices = np.full((self.seats_available), self.rng.choice(self.prices_possible))
         if self.TYPE == "exp":
             self.name = "Exponential model"
             prior_intercept_mu_value = 6.0
@@ -47,16 +46,16 @@ class ExpPred:
 
                 self.name = self.name + " hierarchical"
 
-                self.prior_intercept_mu = np.array([np.random.normal(self.prior_hierarchical_intercept_mu,
+                self.prior_intercept_mu = np.array([self.rng.normal(self.prior_hierarchical_intercept_mu,
                                                                      self.prior_hierarchical_intercept_sigma)
                                           for _ in range(self.nr_different_flights)])
-                self.prior_intercept_sigma = np.array([np.random.normal(self.prior_hierarchical_intercept_sigma,
+                self.prior_intercept_sigma = np.array([self.rng.normal(self.prior_hierarchical_intercept_sigma,
                                                                      self.prior_hierarchical_intercept_sigma)
                                                     for _ in range(self.nr_different_flights)])
-                self.prior_slope_mu = np.array([np.random.normal(self.prior_hierarchical_slope_mu,
+                self.prior_slope_mu = np.array([self.rng.normal(self.prior_hierarchical_slope_mu,
                                                                  self.prior_hierarchical_slope_sigma)
                                             for _ in range(self.nr_different_flights)])
-                self.prior_slope_sigma = np.array([np.random.normal(self.prior_hierarchical_slope_sigma,
+                self.prior_slope_sigma = np.array([self.rng.normal(self.prior_hierarchical_slope_sigma,
                                                               self.prior_hierarchical_slope_sigma)
                                                for _ in range(self.nr_different_flights)])
 
@@ -109,13 +108,13 @@ class ExpPred:
     def initialise_for_flight_type(self, flight_type):
         if USE_HIERARCHICAL_MODEL:
             if not self.flight_initialised[flight_type]:
-                self.prior_slope_mu[flight_type] = np.random.normal(self.posterior_hierarchical_slope_mu,
+                self.prior_slope_mu[flight_type] = self.rng.normal(self.posterior_hierarchical_slope_mu,
                                                               self.posterior_hierarchical_slope_sigma)
-                self.prior_slope_sigma[flight_type] = np.random.normal(self.posterior_hierarchical_slope_sigma,
+                self.prior_slope_sigma[flight_type] = self.rng.normal(self.posterior_hierarchical_slope_sigma,
                                                                     self.posterior_hierarchical_slope_sigma)
-                self.prior_intercept_mu[flight_type] = np.random.normal(self.posterior_hierarchical_intercept_mu,
+                self.prior_intercept_mu[flight_type] = self.rng.normal(self.posterior_hierarchical_intercept_mu,
                                                                     self.posterior_hierarchical_intercept_sigma)
-                self.prior_intercept_sigma[flight_type] = np.random.normal(self.posterior_hierarchical_intercept_sigma,
+                self.prior_intercept_sigma[flight_type] = self.rng.normal(self.posterior_hierarchical_intercept_sigma,
                                                                     self.posterior_hierarchical_intercept_sigma)
                 self.flight_initialised[flight_type] = True
 
@@ -244,7 +243,7 @@ class ExpPred:
         return result
 
     def update_during_booking(self, booking_index, total_customers, action,
-                              start_state, prediction, current_revenue, current_state):
+                              start_state, prediction, current_revenue, current_state, flight_type):
         if self.TYPE == "exp":
             return action, False
         return action, False
@@ -278,7 +277,7 @@ class ExpPred:
         return sum(log_likelihoods)
 
     def prior(self, current_value):
-        return current_value + np.random.multivariate_normal(np.zeros(2), np.eye(2) * self.prior_sigma)
+        return current_value + self.rng.multivariate_normal(np.zeros(2), np.eye(2) * self.prior_sigma)
 
     def get_prior_figures(self):
         return [self.prior_slope_mu, self.prior_slope_sigma,
@@ -287,17 +286,17 @@ class ExpPred:
 
     def sample_mcmc(self, prices_used, observed_data, flight_type):
         if self.stop_sampling[flight_type]:
-            if np.random.uniform() < 0.95:
+            if self.rng.uniform() < 0.95:
                 return
 
         self.mcmc_results[flight_type] = []
         nr_accepted = 0
         nr_sampled = 0
         for i in range(self.n_samples):
-            p_prime_slope_mu = self.prior_slope_mu[flight_type] + np.random.normal(0, 0.02)
-            p_prime_slope_sigma = self.prior_slope_sigma[flight_type] + np.random.normal(0, 0.02)
-            p_prime_intercept_mu = self.prior_intercept_mu[flight_type] + np.random.normal(0, 0.50)
-            p_prime_intercept_sigma = self.prior_intercept_sigma[flight_type] + np.random.normal(0, 0.2)
+            p_prime_slope_mu = self.prior_slope_mu[flight_type] + self.rng.normal(0, 0.02)
+            p_prime_slope_sigma = self.prior_slope_sigma[flight_type] + self.rng.normal(0, 0.02)
+            p_prime_intercept_mu = self.prior_intercept_mu[flight_type] + self.rng.normal(0, 0.50)
+            p_prime_intercept_sigma = self.prior_intercept_sigma[flight_type] + self.rng.normal(0, 0.2)
             nr_sampled += 1
 
             p_prime = [p_prime_intercept_mu, p_prime_intercept_sigma, p_prime_slope_mu, p_prime_slope_sigma]
@@ -309,7 +308,7 @@ class ExpPred:
                 input_ratio = 100
             ratio = np.exp(input_ratio)
 
-            u = np.random.uniform()
+            u = self.rng.uniform()
             if ratio > u:
                 nr_accepted += 1
                 self.p[flight_type] = p_prime

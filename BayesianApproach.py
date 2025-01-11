@@ -13,7 +13,8 @@ class BayesianApproach:
         self.epsilon = epsilon
         self.nr_different_flights = nr_flight_types
         self.skip_offer_price = []
-        self.prices = np.full(self.seats_available, np.random.choice(self.prices_possible))
+        self.rng = np.random.default_rng(seed=42)
+        self.prices = np.full(self.seats_available, self.rng.choice(self.prices_possible))
         if type == "logistic":
             self.name = "Bayesian logistic model"
             self.model = []     # Create logistic model per seat
@@ -30,7 +31,7 @@ class BayesianApproach:
                 self.posterior_hierarchical_mu = prior_mu_value
                 self.prior_hierarchical_sigma = 0.2
                 self.posterior_hierarchical_sigma = 0.2
-                self.prior_mu = np.array([np.random.normal(self.prior_hierarchical_mu, self.prior_hierarchical_sigma)
+                self.prior_mu = np.array([self.rng.normal(self.prior_hierarchical_mu, self.prior_hierarchical_sigma)
                                           for _ in range(self.nr_different_flights)])
                 self.mu_initialised = np.full(self.nr_different_flights, False)
                 self.name = self.name + " hierarchical"
@@ -56,13 +57,13 @@ class BayesianApproach:
     def initialise_for_flight_type(self, flight_type):
         if USE_HIERARCHICAL_MODEL:
             if not self.mu_initialised[flight_type]:
-                self.prior_mu[flight_type] = np.random.normal(self.posterior_hierarchical_mu,
+                self.prior_mu[flight_type] = self.rng.normal(self.posterior_hierarchical_mu,
                                                               self.posterior_hierarchical_sigma)
                 self.mu_initialised[flight_type] = True
 
     def get_prediction(self, price_offer, flight_type):
         # Sample parameter and take exp for log-normal
-        a = np.exp(np.random.normal(self.prior_mu[flight_type], self.prior_sigma[flight_type]))
+        a = np.exp(self.rng.normal(self.prior_mu[flight_type], self.prior_sigma[flight_type]))
         result = self.intercept[flight_type] - a * price_offer
         if result > self.seats_available:
             result = self.seats_available
@@ -71,7 +72,7 @@ class BayesianApproach:
     def get_action(self, state: [], flight_type=0):
         if self.TYPE == "linear":
             if self.frame_count[flight_type] < 5:
-                price = np.random.choice(self.prices_possible)
+                price = self.rng.choice(self.prices_possible)
                 self.prices = np.full(self.seats_available, price)
                 predicted_seats = self.get_prediction(price, flight_type)
                 return self.prices, predicted_seats
@@ -92,8 +93,7 @@ class BayesianApproach:
             predicted_seats = top_seats
             return self.prices, predicted_seats
 
-    @staticmethod
-    def draw_samples(data, prior_m, prior_k, prior_s_sq, prior_v, n_samples=10000):
+    def draw_samples(self, data, prior_m, prior_k, prior_s_sq, prior_v, n_samples=10000):
         N = np.size(data)
         mean_data = np.mean(data)
         SSD = sum((data-mean_data)**2)
@@ -106,7 +106,7 @@ class BayesianApproach:
         alpha = posterior_v / 2
         beta = posterior_v_s_sq / 2
 
-        sig_sq_samples = beta * invgamma.rvs(alpha, size=n_samples)
+        sig_sq_samples = beta * invgamma.rvs(alpha, size=n_samples, random_state=self.rng)
 
         mean_norm = posterior_m
         var_norm = np.sqrt(sig_sq_samples) / posterior_k
@@ -126,7 +126,7 @@ class BayesianApproach:
         return log_normal_mean_samples, log_normal_sig_sq_samples, mean_norm, var_norm
 
     def update_during_booking(self, booking_index, total_customers, action,
-                              start_state, prediction, current_revenue, current_state):
+                              start_state, prediction, current_revenue, current_state, flight_type):
         if self.frame_count < 5:
             return action, False
         if self.TYPE == "linear":
